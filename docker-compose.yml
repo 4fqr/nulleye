@@ -1,0 +1,13 @@
+version: '3.7'
+services:
+  nulleye:
+    build: .
+    ports:
+      - "9100:9100"
+    devices:
+      - "/dev/bpf:/dev/bpf"
+    cap_add:
+      - SYS_ADMIN
+      - NET_ADMIN
+    volumes:
+      - ./config.yaml.example:/etc/nulleye/config.yaml:ro

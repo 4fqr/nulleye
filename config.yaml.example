@@ -1,0 +1,18 @@
+# NullEye example configuration
+profiles:
+  - name: default
+    scan_paths:
+      - /etc
+      - /usr/bin
+      - /var/www
+    file_integrity:
+      scan_interval: 3600
+    ai:
+      trees: 32
+      threshold: 0.85
+    ebpf:
+      ringbuf_size: 4096
+      enabled: true
+socket: /var/run/nulleye.sock
+database: /var/lib/nulleye/nulleye.db
+log_file: /var/log/nulleye/nulleye.log

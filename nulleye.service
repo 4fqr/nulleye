@@ -1,0 +1,14 @@
+[Unit]
+Description=NullEye daemon
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/nulleyed --config /etc/nulleye/config.yaml
+Restart=on-failure
+User=root
+CapabilityBoundingSet=CAP_SYS_ADMIN CAP_SYS_PTRACE CAP_NET_ADMIN
+AmbientCapabilities=CAP_SYS_ADMIN CAP_SYS_PTRACE CAP_NET_ADMIN
+
+[Install]
+WantedBy=multi-user.target
