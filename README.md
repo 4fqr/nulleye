@@ -1,117 +1,195 @@
-# NullEye — Host intrusion detection & file-integrity system
+# NullEye — quick tutorial and reference
 
-NullEye is a modular, production-oriented host intrusion detection system (HIDS) focused on high-fidelity telemetry, low operational overhead, and straightforward operator workflows. It combines optional kernel telemetry (eBPF), continuous file-integrity scanning, a compact anomaly-scoring engine, and an operator-friendly dashboard.
+This README is a hands‑on tutorial first, then a compact reference for operators and developers. It gets you from zero to a working NullEye instance, then shows how to extend, package and harden the deployment.
 
-## Key features
+Why NullEye?
+- Low‑overhead host telemetry with optional kernel eBPF for high‑fidelity events
+- Continuous file integrity monitoring with a Merkle-root approach
+- Lightweight anomaly detection (isolation‑forest + LSTM) and programmable response rules
+- Modular plugin architecture for quick extension (C + Python)
 
-- eBPF telemetry (optional): CO-RE BPF programs emit compact events for process, network and filesystem activity
-- File-integrity monitoring: SHA-256 + Merkle-root verification and a persistent file inventory
-- Anomaly detection: isolation-forest scoring with a sequence LSTM predictor for temporal patterns
-- Pluginable: C plugin API plus a Python runner for rapid extension
-- Resilient defaults: userspace-only operation, graceful fallbacks for missing system libs
-- Small-footprint persistence: SQLite (WAL) for events, alerts and AI model blobs
-- Operator UI: ncurses TUI with stdout fallback for constrained environments
-
----
-
-## Quickstart (developer)
-
-1. Install developer dependencies (Ubuntu):
-   sudo ./scripts/install_deps.sh
-
-2. Build userspace-only (no libbpf required):
-   make nulleye
-
-3. Run locally (no install):
-   ./nulleye            # foreground TUI or stdout fallback
-   ./nulleye --daemon   # background service
-
-4. Run unit tests:
-   make test
+Table of contents
+- Quick tutorial (5 minutes)
+- Verify & debug (health/metrics/tests)
+- Configuration & rules (practical examples)
+- Plugins & extending
+- Packaging & Docker
+- Security, hardening & troubleshooting
+- Developer notes and contribution
 
 ---
 
-## Production install (recommended)
+## Quick tutorial (5 minutes)
 
-1. Build & install:
-   make
-   sudo make install
+Prerequisites (Ubuntu):
+- Userspace-only: `gcc make libsqlite3-dev libssl-dev`
+- Full (optional, for eBPF): `clang bpftool libbpf-dev libelf-dev`
 
-2. Start the service:
-   sudo systemctl enable --now nulleye.service
+1) Build userspace quickly:
 
-3. Verify:
-   sudo journalctl -u nulleye -f
-   curl http://localhost:9100/metrics
+```bash
+git clone https://github.com/4fqr/nulleye.git
+cd nulleye
+make nulleye
+```
+
+2) Run the agent (stdout TUI fallback):
+
+```bash
+./nulleye        # foreground dashboard
+# or run as daemon
+./nulleye --daemon
+```
+
+3) Confirm basic health and metrics:
+
+```bash
+./nulleye --diag           # prints runtime diagnostics
+curl http://127.0.0.1:9100/health   # {"status":"ok"}
+curl http://127.0.0.1:9100/metrics  # Prometheus metrics
+```
+
+4) Run tests (local validation):
+
+```bash
+make test
+```
+
+5) Quick rules example (detect & notify):
+
+```bash
+cat > /tmp/rules.conf <<'EOF'
+if contains('ssh') then notify
+if anomaly_score>90 then kill
+EOF
+# load manually in code (or put under /etc/nulleye/) and restart
+```
+
+Expected result: matching events will appear in the UI and alerts are recorded in the DB.
 
 ---
 
-## CLI & runtime diagnostics
+## Verify & debug
 
-- `nulleye --help`      show usage and flags
-- `nulleye --version`   print build version and exit
-- `nulleye --diag`      print runtime diagnostics and exit
-- `nulleye -c <path>`   use a custom config file
-- `nulleye -d`          run as daemon
-
-Use `nulleye --diag` to confirm which optional features are compiled and which fallbacks are active.
+- `nulleye --diag` — displays version, DB path, compiled feature flags and event-bus stats
+- Logs: `/var/log/nulleye/nulleye.log` (if writable) and `journalctl -u nulleye`
+- Unit tests: `make test`
+- Sanitizer build: `make asan` (for local UB/memory checks)
 
 ---
 
-## Configuration (summary)
+## Configuration & rules (practical)
 
-- File: `/etc/nulleye/config.yaml` (see `config.yaml.example`)
-- Important keys and defaults:
-  - `database` (string) — SQLite path, default `/var/lib/nulleye/nulleye.db`
-  - `log_file` (string) — default `/var/log/nulleye/nulleye.log`
-  - `ebpf_ringbuf_size` (int) — event-bus capacity (default: 4096)
-  - `file_integrity.paths` (list) — paths to scan (default `/etc`, `/usr/bin`, `/var/www`)
-  - `ai.threshold` (int) — anomaly score threshold (default: 85)
+Primary config: `/etc/nulleye/config.yaml` (example provided).
 
-If `libyaml` or `libbpf` are not installed, NullEye will still run with sensible defaults.
+Important snippet (example):
+```yaml
+database: /var/lib/nulleye/nulleye.db
+log_file: /var/log/nulleye/nulleye.log
+file_integrity:
+  paths:
+    - /etc
+    - /usr/bin
+    - /var/www
+ai:
+  threshold: 85
+```
+
+Rules DSL (examples)
+- `if anomaly_score>80 then kill` — high-confidence automated response (use with care)
+- `if contains('passwd') then notify` — textual payload match
+- `if comm==sshd then notify` — command name match
+
+Authoring tips
+- Test rules with `notify` before enabling `kill`/`block_ip`.
+- Keep rules conservative; tune `ai.threshold` using historical data.
 
 ---
 
-## Operational notes
+## Plugins & extending
 
-- Metrics: HTTP `/metrics` (Prometheus text format) on port `9100` by default.
-- Logs: file `/var/log/nulleye/nulleye.log` (if writable) and syslog.
-- Database: SQLite WAL; back up `/var/lib/nulleye/nulleye.db` before upgrades.
-- eBPF: requires kernel BTF + clang/bpftool to build/load programs.
+- C plugin: implement `nulleye_module_get()` returning `nuleye_module_t` callbacks; drop in `/usr/lib/nulleye/plugins/`.
+- Python plugin: simple scripts consumed by the Python runner (see `src/plugins/example_python_plugin.py`).
+- Example workflow: write plugin -> compile -> copy to plugin dir -> restart daemon -> verify in TUI.
+
+See `docs/PLUGINS.md` for a developer guide and code skeletons.
 
 ---
 
-## Development & testing
+## Packaging & Docker
+
+Build a `.deb` locally:
+
+```bash
+make nulleye
+./scripts/package.sh 0.1.0
+sudo dpkg -i nulleye_0.1.0_amd64.deb
+```
+
+Build and run Docker image:
+
+```bash
+make docker-image
+docker run --rm -p 9100:9100 nulleye:local
+# for host-level telemetry you must provide capabilities and /dev/bpf
+```
+
+CI publishes `.deb` and Docker images for tagged releases (see `.github/workflows/ci.yml`).
+
+---
+
+## Security & hardening (practical checklist)
+
+- Run `nulleye` with a dedicated, unprivileged account where possible.
+- Protect filesystem locations: `/var/lib/nulleye` and `/var/log/nulleye` with proper ACLs.
+- For systemd, enable sandboxing options: `ProtectSystem=full`, `PrivateTmp=yes` (verify functionality).
+- Use `rules` conservatively for automatic responses; log and review all automated actions.
+
+---
+
+## Troubleshooting — common issues & fixes
+
+1) eBPF programs not loading
+   - Confirm `clang`, `bpftool` and `libbpf-dev` are installed and kernel BTF is available.
+   - Check `journalctl -k` for verifier errors and `journalctl -u nulleye` for loader logs.
+
+2) DB failures
+   - Check `/var/lib/nulleye` permissions and available disk space.
+   - NullEye falls back to an in-memory DB on startup failure (`--diag` shows DB path).
+
+3) TUI fallback
+   - If ncurses is missing, NullEye uses a plain stdout dashboard; install `libncurses-dev` for the full UI.
+
+---
+
+## Developer notes
+
+- Language: C11 + pthreads; unit tests in `src/tests/`.
+- eBPF: add CO‑RE-safe `.bpf.c` files under `src/ebpf/bpf/` and ensure clang/bpftool are available at build time.
+- CI: runs unit tests, ASAN build, static analysis and publishes artifacts on tags.
+
+---
+
+## Getting help & contributing
+
+- Read `CONTRIBUTING.md` for development workflow.
+- Open GitHub issues for bugs/feature requests; use PRs against `main` or feature branches.
+- For SOC/playbook and runbooks see `docs/SOC_PLAYBOOK.md`.
+
+---
+
+## Quick reference (commands)
 
 - Build: `make nulleye`
-- Tests: `make test` (runs unit tests in `src/tests/`)
-- Add eBPF programs: add `.bpf.c` under `src/ebpf/bpf/` (requires clang/bpftool)
+- Test: `make test`
+- Package: `./scripts/package.sh <version>`
+- Docker: `make docker-image`
+- Diagnostics: `nulleye --diag`, `curl /health`, `curl /metrics`
 
 ---
 
-## Troubleshooting
+If you want, I will now:
+1) Open a PR-sized change with this README and a short changelog, or
+2) Commit directly to `main` (you selected `main`).
 
-- eBPF programs not loading: confirm `clang`, `bpftool`, and kernel BTF support.
-- TUI not available: ncurses missing — the stdout fallback will still show events.
-- DB errors: run with `--diag` to inspect the configured DB path; check file perms and available disk space.
-
----
-
-## Security
-
-- eBPF program attach operations require elevated privileges; NullEye minimizes privileged work after attach.
-- Use the packaged service unit to run with least privilege and proper filesystem locations.
-
----
-
-## Where to look next
-
-- `ARCHITECTURE.md` — design, dataflow and schema
-- `MANUAL.md` — admin guide and configuration examples
-- `CONTRIBUTING.md` — dev workflow and coding standards
-
----
-
-## License
-
-NullEye is available under the MIT License — see `LICENSE`.
+Which do you prefer?
