@@ -3,5 +3,6 @@
 
 int ebpf_loader_start(void);
 void ebpf_loader_stop(void);
+int ebpf_compiled(void);
 
 #endif

@@ -1,35 +1,83 @@
-# NullEye Manual
+# NullEye — Administrator Manual
 
-Overview
+This manual documents operational procedures, configuration reference, and troubleshooting steps for NullEye.
 
-NullEye is an agent designed to provide host telemetry, file integrity monitoring and real-time anomaly detection. This manual covers installation, configuration and operation for administrators.
+## Quick operational checklist
 
-Installation
+- Install and build: `make && sudo make install`
+- Start service: `sudo systemctl enable --now nulleye.service`
+- Verify health: `curl http://127.0.0.1:9100/metrics` and `sudo journalctl -u nulleye -f`
 
-1. Install dependencies:
-   sudo ./scripts/install_deps.sh
-2. Build:
-   make
-3. Install:
-   sudo make install
-4. Start:
-   sudo systemctl enable --now nulleye.service
+## Configuration reference
 
-Configuration
+File: `/etc/nulleye/config.yaml` (YAML)
 
-- The main configuration file is /etc/nulleye/config.yaml. Use config.yaml.example as a template.
-- Profiles allow separate monitoring sets; include other YAML files using path references.
+Example structure (keys and types):
 
-Runtime
+- `database` (string)
+  - Path to the SQLite DB. Default `/var/lib/nulleye/nulleye.db`
 
-- The daemon runs as `nulleyed`. The terminal UI `nulleye` connects over a Unix socket.
-- Metrics are exposed on port 9100 at `/metrics` by default.
+- `log_file` (string)
+  - Log file path. Default `/var/log/nulleye/nulleye.log`
 
-Backups and upgrades
+- `ebpf_ringbuf_size` (int)
+  - Event bus capacity. Default `4096`.
 
-- Back up /var/lib/nulleye/nulleye.db before upgrades.
-- To upgrade, stop the service, replace binary, then start the service.
+- `file_integrity` (map)
+  - `paths` (list of strings) — directories to scan
+  - `interval` (int) — scan interval in seconds
 
-Support
+- `ai` (map)
+  - `threshold` (int) — anomaly score threshold
+  - `trees` (int) — isolation forest ensemble size
 
-- Check /var/log/nulleye/nulleye.log and `journalctl -u nulleye` for runtime information.
+- `modules` (map)
+  - Enable/disable built-in modules (ai, file_integrity, process_monitor, network_monitor, user_monitor)
+
+Notes
+
+- Missing keys default to safe, production-friendly values.
+- If `libyaml` is not present at build time, NullEye falls back to a minimal parser.
+
+## Runtime modes
+
+- Userspace-only: runs without libbpf/clang; useful for lightweight hosts or containers.
+- Full mode: when libbpf and kernel BTF are available, eBPF programs provide higher-fidelity events.
+
+## Health & diagnostics
+
+- Runtime diagnostics: `nulleye --diag` (prints version, DB path, compiled features, event-bus stats)
+- Metrics: `http://<host>:9100/metrics`
+- Logs: `tail -F /var/log/nulleye/nulleye.log` and `journalctl -u nulleye`.
+
+## Backups & upgrades
+
+- Back up the SQLite DB before upgrades: `cp /var/lib/nulleye/nulleye.db /var/lib/nulleye/nulleye.db.bak`
+- Upgrade procedure:
+  1. `sudo systemctl stop nulleye`
+  2. Replace binary (or package install)
+  3. `sudo systemctl start nulleye`
+  4. Verify logs and metrics
+
+## Troubleshooting
+
+- eBPF programs will not load if clang/bpftool or libbpf-dev are missing — check `dmesg` and `journalctl`.
+- If the TUI is blank, run `nulleye --diag` and confirm event-bus pending > 0.
+- If DB writes fail, check disk space and file permissions for `/var/lib/nulleye`.
+
+## Security recommendations
+
+- Run the service with a dedicated unprivileged account where possible.
+- Limit access to `/var/lib/nulleye` and log directories using file system ACLs.
+- Use system-level auditing for sensitive hosts (auditd) in addition to NullEye.
+
+## Administration API (CLI)
+
+- `nulleye --version` — show build version
+- `nulleye --diag` — print runtime diagnostics
+- `nulleye --help` — usage
+
+## Contact & contribution
+
+- See `CONTRIBUTING.md` for development workflow and pull-request guidelines.
+- For security issues, see `SECURITY.md`.

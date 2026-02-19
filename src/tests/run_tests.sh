@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
+cd "$(dirname "$0")"
+
 cc -std=gnu11 -Wall -Wextra -I.. test_event_bus.c ../core/event_bus.c -o test_event_bus
 ./test_event_bus
 

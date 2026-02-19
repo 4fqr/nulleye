@@ -71,6 +71,8 @@ static void *rb_poll(void *arg)
 
 #else
 
+int ebpf_compiled(void) { return 0; }
+
 static struct ring_buffer *rb = NULL;
 static pthread_t rb_thread;
 static volatile int rb_running = 0;
@@ -90,6 +92,8 @@ static void *rb_poll(void *arg)
 
 #endif
 #if NYE_HAVE_LIBBPF
+
+int ebpf_compiled(void) { return 1; }
 
 int ebpf_loader_start(void)
 {
