@@ -148,6 +148,16 @@ install: all
 	install -m 0644 README.md /usr/share/doc/nulleye/README.md
 	systemctl daemon-reload
 
+.PHONY: package docker-image
+package:
+	@VERSION=$${VERSION:-0.1.0}; ./scripts/package.sh "$${VERSION}"
+
+docker-image:
+	@VERSION=$${VERSION:-local}
+	docker build -t nulleye:$${VERSION} .
+	docker tag nulleye:$${VERSION} nulleye:latest
+
+
 clean:
 	rm -rf $(BUILD_DIR) nulleye nulleyed $(BPFOBJ)
 
