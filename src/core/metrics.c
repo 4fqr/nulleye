@@ -35,8 +35,9 @@ static void *metrics_loop(void *arg)
         if (r > 0) {
             req[r] = '\0';
             if (strstr(req, "GET /metrics ") == req || strstr(req, "GET /metrics HTTP/1.") == req) {
-                dprintf(fd, "HTTP/1.1 200 OK\r\nContent-Type: text/plain; version=0.0.4; charset=utf-8\r\nContent-Length: %zu\r\n\r\n%s", sizeof(metrics_response) - 1, metrics_response);
-            } else {
+                dprintf(fd, "HTTP/1.1 200 OK\r\nContent-Type: text/plain; version=0.0.4; charset=utf-8\r\nContent-Length: %zu\r\n\r\n%s", sizeof(metrics_response) - 1, metrics_response);            } else if (strstr(req, "GET /health ") == req || strstr(req, "GET /health HTTP/1.") == req) {
+                const char *health = "{\"status\":\"ok\"}\n";
+                dprintf(fd, "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: %zu\r\n\r\n%s", strlen(health), health);            } else {
                 dprintf(fd, "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n\r\n");
             }
         }

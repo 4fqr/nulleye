@@ -81,6 +81,11 @@ OBJS = \
 
 all: check-deps $(BPF_DIR) $(BPFOBJ) $(BINS)
 
+.PHONY: asan
+asan: CFLAGS += -fsanitize=address,undefined -g -O1 -fno-omit-frame-pointer
+asan: LDFLAGS += -fsanitize=address,undefined
+asan: nulleye
+
 check-deps:
 	@command -v $(CLANG) >/dev/null 2>&1 || { echo >&2 "clang is required. sudo apt install clang llvm -y"; exit 1; }
 	@command -v bpftool >/dev/null 2>&1 || { echo >&2 "bpftool is required. sudo apt install bpftool -y"; exit 1; }

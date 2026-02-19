@@ -14,4 +14,10 @@ cc -std=gnu11 -Wall -Wextra -I.. test_lstm.c ../ai/lstm_predictor.c -lm -o test_
 cc -std=gnu11 -Wall -Wextra -I.. test_rules.c ../core/rules.c ../core/response_engine.c ../core/logger.c ../core/db.c ../core/config.c -lsqlite3 -o test_rules
 ./test_rules
 
+cc -std=gnu11 -Wall -Wextra -I.. test_rules_eval.c ../core/rules.c ../core/response_engine.c ../core/logger.c ../core/db.c ../core/config.c -lsqlite3 -o test_rules_eval
+./test_rules_eval
+
+cc -std=gnu11 -Wall -Wextra -I.. test_db_model.c ../core/db.c ../core/logger.c ../core/config.c -lsqlite3 -o test_db_model
+./test_db_model
+
 echo "All tests passed"
